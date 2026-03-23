@@ -88,6 +88,7 @@ lws_http_compression_apply(struct lws *wsi, const char *name,
 	}
 
 	wsi->http.lcs = lcs_available[n];
+	wsi->http.comp_ctx.wsi = wsi;
 	wsi->http.comp_ctx.may_have_more = 0;
 	wsi->http.comp_ctx.final_on_input_side = 0;
 	wsi->http.comp_ctx.chunking = 0;
@@ -140,6 +141,13 @@ lws_http_compression_transform(struct lws *wsi, unsigned char *buf,
 		return 0;
 	}
 
+	if (ctx->final_on_input_side && len) {
+		lwsl_wsi_notice(wsi, "dropping %zu trailing payload bytes", len);
+		*outbuf = buf;
+		*olen_oused = 0;
+		return 0;
+	}
+
 	if (wp1f == LWS_WRITE_HTTP_FINAL) {
 		/*
 		 * ...we may get a large buffer that represents the final input
@@ -184,7 +192,9 @@ lws_http_compression_transform(struct lws *wsi, unsigned char *buf,
 	n = wsi->http.lcs->process(ctx, buf, &ilen_iused, *outbuf, olen_oused);
 
 	if (n && n != 1) {
-		lwsl_err("%s: problem with compression\n", __func__);
+		lwsl_err("%s: %s: problem with %s comp: process returned %d\n",
+			 __func__, lws_wsi_tag(wsi),
+			 wsi->http.lcs->encoding_name, n);
 
 		return -1;
 	}
