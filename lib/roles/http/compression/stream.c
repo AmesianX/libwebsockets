@@ -63,6 +63,9 @@ lws_http_compression_apply(struct lws *wsi, const char *name,
 {
 	size_t n;
 
+	if (wsi->http.lcs)
+		lws_http_compression_destroy(wsi);
+
 	for (n = 0; n < LWS_ARRAY_SIZE(lcs_available); n++) {
 		/* if name is non-NULL, choose only that compression method */
 		if (name && strcmp(lcs_available[n]->encoding_name, name))
@@ -112,7 +115,7 @@ lws_http_compression_destroy(struct lws *wsi)
 		return;
 
 	wsi->http.lcs->destroy(&wsi->http.comp_ctx);
-
+	lws_buflist_destroy_all_segments(&wsi->http.comp_ctx.buflist_comp);
 	wsi->http.lcs = NULL;
 }
 
@@ -143,6 +146,7 @@ lws_http_compression_transform(struct lws *wsi, unsigned char *buf,
 
 	if (ctx->final_on_input_side && len) {
 		lwsl_wsi_notice(wsi, "dropping %zu trailing payload bytes", len);
+		lwsl_hexdump_notice(buf, len);
 		*outbuf = buf;
 		*olen_oused = 0;
 		return 0;
